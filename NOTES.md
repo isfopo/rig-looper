@@ -1,123 +1,27 @@
-# rig
+# rig-looper — Notes
 
-A looper with a terminal UI (Bubble Tea), intended to run against a DAW
-(Ableton) via Ableton Link and MIDI.
+## Build and run
 
-## Current status — Milestone 3: single-channel looper done [core], 1-2 done
+Requires Go >= 1.24 and a C compiler for CGO (RtMidi/miniaudio).
 
-- Bubble Tea MIDI monitor: port list, open/close; traffic as counters +
-  header activity lamps (the event log went away in favor of those).
-- Engines:
-  - `rtmidi` (default): real ports via RtMidi/CGO (WinMM/CoreMIDI/ALSA).
-  - `test`: fake loopback ports via gomidi `testdrv`, no CGO in the path.
-- `-demo`: synthetic event sender on the test engine.
-- `-watch 5s`: headless event printing (smoke test / debugging).
-- `-audio 5s`: headless audio check over miniaudio (via malgo CGO):
-  enumerates devices, meters default capture (peak dBFS). Space backend
-  order: WASAPI (Win), ALSA-first (Linux). `-loopback` feeds capture into
-  playback for round-trip tests (in containers the pipewire null sink +
-  monitor routing make this a safe, deterministic loop).
-- `-loop 2s`: headless looper round-trip check (milestone 3): duplex stream
-  records a synthesized 480 Hz tone (exact 100-frame period at 48 kHz), the
-  take closes at the deadline, the loop plays back, and the recorded level
-  is verified (-50 dBFS floor).
-- Looper internals: `internal/looper` is pure buffer math + a state machine
-  (idle/rec/play/overdub) with atomics; one preallocated 30 s s16 buffer
-  (5.8 MB stereo). The TUI attaches it via ONE full-duplex stream
-  (`audio.OpenDuplex`) built from the audio panel's device selections — the
-  shared callback keeps capture and playback sample-aligned, so overdubs
-  land where the loop reads. `l` attach/cycle, `x` clear; a channel change
-  re-creates the looper (loop lost, status says so). The panel keeps meter
-  duty by reading the looper's peak/window pass-through (`TakeMeter`).
-- Container audio: each run starts a private PipeWire session (+WirePlumber,
-  D-Bus); a null sink becomes the default playback target and capture uses
-  its monitor via the `PIPEWIRE_NODE`/`stream.capture.sink` route below.
-  WirePlumber 0.4 needs the Debian workaround and the container needs the
-  virtual rig config (see scripts/).
+    make build
+    make test
+    make vet
 
-## TUI gotchas
+The binary is `rig-looper` (`rig-looper.exe` on Windows).
 
-- `Model.View()` must emit **exactly `m.height` \n-separated rows with no
-  trailing newline**. Bubbletea's standard renderer splits the frame on `\n`
-  and, when the split count exceeds the terminal height, drops rows **from
-  the top** to fit. A trailing `\n` adds one empty row, so the header line
-  (title + activity lamps) was silently erased in every terminal — it looked
-  like a Zed altscreen quirk but reproduced in tmux and Windows Terminal too.
-- Reproduce/verify UI rendering headlessly inside the dev container with
-  tmux (`apt-get install tmux` on demand): run the TUI in a detached
-  session, `send-keys` keys, then `capture-pane -p` (plain text) and
-  `pipe-pane` the raw output stream to a log for byte-level analysis.
+## Container development
 
-## Packaging notes (kept in mind for later)
+Day-to-day TUI development uses the Docker/PipeWire rig:
 
-- `tools/zigcc.cmd` / `tools/zigcxx.cmd` are the only nonstandard build
-  machinery for the zig path; a release build can run `go build` with CGO=1
-  and `-Zig` (or gcc equivalents per host). zig is also a native cross
-  compiler, so Windows/macOS/Linux release targets can come from one machine
-  eventually.
-- The `test` engine proves a workflow with no hardware/toolchain lock-in.
+    docker compose build
+    docker compose run --rm dev
+    docker compose run --rm rig -engine test -demo
 
-## Container audio internals (gotchas, for future maintenance)
+See `scripts/container-entrypoint.sh` and `scripts/pipewire/` for the
+PipeWire bootstrap and virtual sink configuration.
 
-- **WirePlumber without systemd-logind**: Debian's build aborts on start
-  (Debian bug #1019404); the entrypoint writes
-  `["with-logind"] = false` into bluetooth.lua.d/50-bluez-config.lua.
-- **No devices appear without a session manager**: PipeWire alone ships no
-  default sink; WirePlumber only creates nodes for real ALSA cards (none in
-  a container), hence the null sink in scripts/pipewire/rig-audio.conf.
-- **Capture-routing (PipeWire 0.3.65 + WirePlumber 0.4.13)**: a capture
-  stream's explicit `target.object`/`node.target` pointing at a *sink* is
-  ignored unless the stream also has `stream.capture.sink = true`
-  (policy-node.lua routes it to the default source otherwise). The
-  alsa-pipewire plugin accepts pipe-wide props via `PIPEWIRE_ALSA` env
-  (arbitrary property update string) plus `PIPEWIRE_NODE` (target override);
-  the entrypoint exports both so every ALSA plugin client (arecord, aplay,
-  miniaudio) captures the null sink's monitor — a deterministic loopback.
-- **miniaudio explicit device IDs (audio.go)**: `ma_device_id` is a union
-  whose `alsa`/`pulse` members are plain strings at offset 0 (256 bytes).
-  Passing the ID back through `Options.DeviceID` must land in **C memory**:
-  a Go-managed buffer handed into `ma_device_init` trips the cgo pointer
-  checker ("Go pointer to unpinned buffer"), and letting `deviceConfig`
-  free its C copy too early (defer on its own return) leaves a dangling
-  pointer — ALSA then reports `Unknown PCM <garbage>` / MA_DOES_NOT_EXIST.
-  The ID allocation is therefore freed by the caller of
-  `malgo.InitDevice`.
-- daemon logs land in /tmp/pipewire.log and /tmp/wireplumber.log inside
-  containers.
+## Current status
 
-## Roadmap (rough order)
-
-1. x  MIDI monitor (this milestone)
-2. x  Audio I/O: enumeration + capture meter + capture→playback round trip
-   done headless (-audio/-loopback); TUI device dropdowns + meter + monitor
-   path wired into the monitor view ('i'/'o'/'c'/'m').
-3. x  Single-channel looper [core]: record/overdub/play/clear on one duplex
-   stream (internal/looper state machine, TUI keys l/x, headless -loop round
-   trip). Tempo-synced edges deferred to milestone 7 (Ableton Link).
-4. MIDI pedal mapping (config file: device, note/CC -> action)
-5. Waveform display + position cursor on the TUI
-6. Multichannel/track stack, loop-in-loop
-7. Ableton Link clock sync (UDP protocol, Go binding or port)
-8. Release packaging (prebuilt binaries, `-engine rtmidi` embedding)
-
-## Layout
-
-    cmd/rig/          entrypoint, flags, headless watch/audio/loop modes
-    internal/looper/     loop engine: state machine + s16 buffer math (TUI-agnostic)
-    internal/midi/       MIDI Engine (driver owner), Monitor (event stream)
-    internal/audio/      audio Engine (miniaudio via malgo: Devices, capture, playback, duplex)
-    internal/ui/         terminal UI: model.go (state/logic), view.go (render),
-                         demo.go, audio_panel.go (device dropdowns/meter/monitor/looper)
-    tools/               zig cc CGO wrappers
-    scripts/             container entrypoint + pipewire virtual rig config
-
-## Component convention (TUI)
-
-The TUI follows the Bubble Tea component convention: each sub-feature is its
-own package with a `tea.Model` (Init/Update/View), its own messages, and no
-imports from `rig` internals where it is meant to be reusable.
-
-Reusable, generic components live in the separate Go module
-`components/` (`github.com/isfopo/rig/components`): `dropdown`, `list`,
-`lamps`, `meter`. Domain components (`audioPanel`) stay in `internal/ui`
-but consume these primitives. `go.work` wires the two modules for local dev.
+Single-channel looper is implemented and covered by the headless `-loop`
+check. Tempo-synced edges and multichannel support are future work.
