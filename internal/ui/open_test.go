@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"tuiper/internal/midi"
+	"github.com/isfopo/rig-core/midi"
 )
 
 // TestOpenPortNoPanic drives the real open-port sequence without a TUI: list

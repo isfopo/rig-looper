@@ -27,8 +27,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"tuiper/internal/audio"
-	"tuiper/internal/looper"
+	dropdown "github.com/isfopo/rig-components/dropdown"
+
+	"github.com/isfopo/rig-core/audio"
+	"github.com/isfopo/rig-core/looper"
 )
 
 // dropdown subjects
@@ -55,12 +57,10 @@ type audioPanel struct {
 
 	ins, outs []audio.Device // last enumeration (may be nil until listed)
 
-	focus  int // open dropdown: dropNone/dropIn/dropOut/dropChan
-	cursor int // cursor inside the open dropdown
-
-	inSel  int // index into inOptions(): 0 = system default, 1.. = ins[i-1]
-	outSel int // index into outOptions()
-	chans  int // index into channelCounts
+	// dropdown components (one per subject). At most one has Focus==true.
+	inDrop   dropdown.Model
+	outDrop  dropdown.Model
+	chanDrop dropdown.Model
 
 	seq atomic.Int64 // restart token: only the newest async open is adopted
 
@@ -101,6 +101,16 @@ func newAudioPanel() *audioPanel {
 	if ap.initErr != nil {
 		ap.eng = nil
 	}
+	// channel dropdown options are static
+	opts := make([]string, len(channelCounts))
+	for i, c := range channelCounts {
+		opts[i] = fmt.Sprintf("%d channels", c)
+	}
+	ap.chanDrop = dropdown.New(opts, 0)
+	// device dropdowns start with just the system-default entry; they are
+	// rebuilt when enumeration arrives (see audioListMsg handling in model.go)
+	ap.inDrop = dropdown.New([]string{"system default"}, 0)
+	ap.outDrop = dropdown.New([]string{"system default"}, 0)
 	return ap
 }
 
@@ -129,27 +139,29 @@ func deviceIDFor(opts []audio.Device, sel int) []byte {
 }
 
 func (ap *audioPanel) inName() string {
-	if ap.inSel == 0 {
+	sel := ap.inDrop.Current
+	if sel == 0 {
 		return "system default"
 	}
-	if ap.inSel <= len(ap.ins) {
-		return ap.ins[ap.inSel-1].Name
+	if sel <= len(ap.ins) {
+		return ap.ins[sel-1].Name
 	}
 	return "?"
 }
 
 func (ap *audioPanel) outName() string {
-	if ap.outSel == 0 {
+	sel := ap.outDrop.Current
+	if sel == 0 {
 		return "system default"
 	}
-	if ap.outSel <= len(ap.outs) {
-		return ap.outs[ap.outSel-1].Name
+	if sel <= len(ap.outs) {
+		return ap.outs[sel-1].Name
 	}
 	return "?"
 }
 
 func (ap *audioPanel) channels() uint32 {
-	return channelCounts[ap.chans]
+	return channelCounts[ap.chanDrop.Current]
 }
 
 // ---- messages ---------------------------------------------------------
@@ -208,10 +220,10 @@ func (ap *audioPanel) restartCmd() tea.Cmd {
 	// snapshot all selection state on the Update thread
 	seq := ap.seq.Add(1)
 	opts := audio.Options{
-		DeviceID: deviceIDFor(ap.inOptions(), ap.inSel),
+		DeviceID: deviceIDFor(ap.inOptions(), ap.inDrop.Current),
 		Channels: ap.channels(),
 	}
-	outID := deviceIDFor(ap.outOptions(), ap.outSel)
+	outID := deviceIDFor(ap.outOptions(), ap.outDrop.Current)
 	mon := ap.monitor
 
 	captureCmd := func() tea.Msg {
@@ -259,8 +271,8 @@ func (ap *audioPanel) looperRestartCmd() tea.Cmd {
 	}
 	seq := ap.seq.Add(1)
 	opts := audio.Options{
-		DeviceID:     deviceIDFor(ap.inOptions(), ap.inSel),
-		PlayDeviceID: deviceIDFor(ap.outOptions(), ap.outSel),
+		DeviceID:     deviceIDFor(ap.inOptions(), ap.inDrop.Current),
+		PlayDeviceID: deviceIDFor(ap.outOptions(), ap.outDrop.Current),
 		Channels:     ap.channels(),
 	}
 	return func() tea.Msg {
@@ -434,69 +446,112 @@ func (ap *audioPanel) drainBuf() {
 	}
 }
 
+// openWhich returns dropIn/dropOut/dropChan for the currently open dropdown,
+// or dropNone when none is open.
+func (ap *audioPanel) openWhich() int {
+	switch {
+	case ap.inDrop.Focus:
+		return dropIn
+	case ap.outDrop.Focus:
+		return dropOut
+	case ap.chanDrop.Focus:
+		return dropChan
+	}
+	return dropNone
+}
+
+// anyOpen reports whether any dropdown is currently open.
+func (ap *audioPanel) anyOpen() bool { return ap.openWhich() != dropNone }
+
+// closeAll closes every dropdown.
+func (ap *audioPanel) closeAll() {
+	ap.inDrop = ap.inDrop.Close()
+	ap.outDrop = ap.outDrop.Close()
+	ap.chanDrop = ap.chanDrop.Close()
+}
+
 // toggleDropdown opens the focused dropdown (or closes it if already open).
 func (ap *audioPanel) toggleDropdown(which int) {
-	if ap.focus == which {
-		ap.focus = dropNone
+	if ap.openWhich() == which {
+		ap.closeAll()
 		return
 	}
-	ap.focus = which
-	ap.cursor = ap.currentSelection(which)
-}
-
-// currentSelection maps an open dropdown subject to its selection index.
-func (ap *audioPanel) currentSelection(focus int) int {
-	switch focus {
+	ap.closeAll()
+	switch which {
 	case dropIn:
-		return ap.inSel
+		opts := make([]string, len(ap.inOptions()))
+		for i, d := range ap.inOptions() {
+			if i == 0 {
+				opts[i] = "system default"
+			} else {
+				opts[i] = d.Name
+			}
+		}
+		ap.inDrop = ap.inDrop.SetOptions(opts)
+		ap.inDrop = ap.inDrop.Open()
 	case dropOut:
-		return ap.outSel
+		opts := make([]string, len(ap.outOptions()))
+		for i, d := range ap.outOptions() {
+			if i == 0 {
+				opts[i] = "system default"
+			} else {
+				opts[i] = d.Name
+			}
+		}
+		ap.outDrop = ap.outDrop.SetOptions(opts)
+		ap.outDrop = ap.outDrop.Open()
 	case dropChan:
-		return ap.chans
-	}
-	return 0
-}
-
-// dropdownCount is the number of entries of the currently open dropdown.
-func (ap *audioPanel) dropdownCount() int {
-	switch ap.focus {
-	case dropIn:
-		return len(ap.inOptions())
-	case dropOut:
-		return len(ap.outOptions())
-	case dropChan:
-		return len(channelCounts)
-	default:
-		return 0
+		ap.chanDrop = ap.chanDrop.Open()
 	}
 }
 
 // moveCursor moves the cursor inside the open dropdown with wrap-around.
 func (ap *audioPanel) moveCursor(delta int) {
-	n := ap.dropdownCount()
-	if n == 0 {
-		return
+	switch ap.openWhich() {
+	case dropIn:
+		ap.inDrop = ap.inDrop.Move(delta)
+	case dropOut:
+		ap.outDrop = ap.outDrop.Move(delta)
+	case dropChan:
+		ap.chanDrop = ap.chanDrop.Move(delta)
 	}
-	ap.cursor = (ap.cursor + delta + n) % n
+}
+
+// dropdownCount is the number of entries of the currently open dropdown.
+func (ap *audioPanel) dropdownCount() int {
+	switch ap.openWhich() {
+	case dropIn:
+		return ap.inDrop.Count()
+	case dropOut:
+		return ap.outDrop.Count()
+	case dropChan:
+		return ap.chanDrop.Count()
+	}
+	return 0
 }
 
 // pick selects the entry under the cursor; the caller restarts the streams.
 // Returns true when the selection actually moved (restart only then).
 func (ap *audioPanel) pick() bool {
-	if ap.focus == dropNone {
+	which := ap.openWhich()
+	if which == dropNone {
 		return false
 	}
-	sel := ap.cursor
-	changed := sel != ap.currentSelection(ap.focus)
-	switch ap.focus {
+	var changed bool
+	switch which {
 	case dropIn:
-		ap.inSel = sel
+		nm, ch := ap.inDrop.Pick()
+		ap.inDrop = nm
+		changed = ch
 	case dropOut:
-		ap.outSel = sel
+		nm, ch := ap.outDrop.Pick()
+		ap.outDrop = nm
+		changed = ch
 	case dropChan:
-		ap.chans = sel
+		nm, ch := ap.chanDrop.Pick()
+		ap.chanDrop = nm
+		changed = ch
 	}
-	ap.focus = dropNone
 	return changed
 }
 

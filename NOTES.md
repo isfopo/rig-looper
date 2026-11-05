@@ -1,4 +1,4 @@
-# tuiper
+# rig
 
 A looper with a terminal UI (Bubble Tea), intended to run against a DAW
 (Ableton) via Ableton Link and MIDI.
@@ -35,27 +35,6 @@ A looper with a terminal UI (Bubble Tea), intended to run against a DAW
   WirePlumber 0.4 needs the Debian workaround and the container needs the
   virtual rig config (see scripts/).
 
-## Build (Windows)
-
-Requires: Go >= 1.24, mingw-w64 gcc
-(`winget install BrechtSanders.WinLibs.POSIX.UCRT`).
-
-    .\build.ps1            # vet + build tuiper.exe (CGO via mingw gcc)
-    .\build.ps1 -Watch     # also run the headless demo smoke test
-    .\build.ps1 -Zig       # build with zig cc instead (slow on Windows)
-
-gcc runtimes are linked statically so the exe is self-contained. The zig
-path (tools/zigcc.cmd / tools/zigcxx.cmd shims) still works but is kept
-mainly for cross-compiling release targets later.
-
-TUI development now happens in a Linux container (Dockerfile +
-docker-compose.yml; Go caches in named volumes, test engine for the TUI,
-ALSA via the `midi` profile on Linux hosts). Windows is the host-side path:
-real-hardware MIDI testing and release binaries.
-
-    .\tuiper.exe                       # TUI on real ports
-    .\tuiper.exe -engine test -demo    # TUI on fake loopback + synthetic events
-
 ## TUI gotchas
 
 - `Model.View()` must emit **exactly `m.height` \n-separated rows with no
@@ -85,7 +64,7 @@ real-hardware MIDI testing and release binaries.
   `["with-logind"] = false` into bluetooth.lua.d/50-bluez-config.lua.
 - **No devices appear without a session manager**: PipeWire alone ships no
   default sink; WirePlumber only creates nodes for real ALSA cards (none in
-  a container), hence the null sink in scripts/pipewire/tuiper-audio.conf.
+  a container), hence the null sink in scripts/pipewire/rig-audio.conf.
 - **Capture-routing (PipeWire 0.3.65 + WirePlumber 0.4.13)**: a capture
   stream's explicit `target.object`/`node.target` pointing at a *sink* is
   ignored unless the stream also has `stream.capture.sink = true`
@@ -123,7 +102,7 @@ real-hardware MIDI testing and release binaries.
 
 ## Layout
 
-    cmd/tuiper/          entrypoint, flags, headless watch/audio/loop modes
+    cmd/rig/          entrypoint, flags, headless watch/audio/loop modes
     internal/looper/     loop engine: state machine + s16 buffer math (TUI-agnostic)
     internal/midi/       MIDI Engine (driver owner), Monitor (event stream)
     internal/audio/      audio Engine (miniaudio via malgo: Devices, capture, playback, duplex)
@@ -131,3 +110,14 @@ real-hardware MIDI testing and release binaries.
                          demo.go, audio_panel.go (device dropdowns/meter/monitor/looper)
     tools/               zig cc CGO wrappers
     scripts/             container entrypoint + pipewire virtual rig config
+
+## Component convention (TUI)
+
+The TUI follows the Bubble Tea component convention: each sub-feature is its
+own package with a `tea.Model` (Init/Update/View), its own messages, and no
+imports from `rig` internals where it is meant to be reusable.
+
+Reusable, generic components live in the separate Go module
+`components/` (`github.com/isfopo/rig/components`): `dropdown`, `list`,
+`lamps`, `meter`. Domain components (`audioPanel`) stay in `internal/ui`
+but consume these primitives. `go.work` wires the two modules for local dev.

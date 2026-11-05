@@ -6,7 +6,7 @@ import (
 
 	gomidi "gitlab.com/gomidi/midi/v2"
 
-	engmidi "tuiper/internal/midi"
+	engmidi "github.com/isfopo/rig-core/midi"
 )
 
 type DemoSender struct {

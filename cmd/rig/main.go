@@ -1,16 +1,16 @@
-// Command tuiper is a looper built around a terminal user interface. It is
+// Command rig is a looper built around a terminal user interface. It is
 // currently past milestone 1 (MIDI input monitor; -watch) and exercising
 // milestone 2 (audio device enumeration + capture meter + loopback round
 // trip; -audio).
 //
 // Usage:
 //
-//	tuiper                       real hardware ports (RtMidi via CGO)
-//	tuiper -engine test          fake loopback ports (no hardware needed)
-//	tuiper -engine test -demo    fake ports plus a synthetic event sender
-//	tuiper -audio 3s             headless audio device check
-//	tuiper -audio 3s -loopback   capture fed straight into playback
-//	tuiper -loop 2s              headless looper round-trip check (milestone 3)
+//	rig                       real hardware ports (RtMidi via CGO)
+//	rig -engine test          fake loopback ports (no hardware needed)
+//	rig -engine test -demo    fake ports plus a synthetic event sender
+//	rig -audio 3s             headless audio device check
+//	rig -audio 3s -loopback   capture fed straight into playback
+//	rig -loop 2s              headless looper round-trip check (milestone 3)
 package main
 
 import (
@@ -22,8 +22,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"tuiper/internal/midi"
-	"tuiper/internal/ui"
+	"github.com/isfopo/rig-core/midi"
+	"rig/internal/ui"
 )
 
 func main() {
@@ -48,7 +48,7 @@ func main() {
 
 	eng, err := newEngine(*engineName)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper:", err)
+		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
 
@@ -69,7 +69,7 @@ func main() {
 
 	final, err := program.Run()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper:", err)
+		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
 
@@ -97,7 +97,7 @@ func runWatch(eng *midi.Engine, demo bool, d time.Duration) int {
 	defer mon.Stop()
 
 	if err := mon.Open(0); err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: open port 0:", err)
+		fmt.Fprintln(os.Stderr, "rig: open port 0:", err)
 		return 1
 	}
 

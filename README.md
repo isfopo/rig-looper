@@ -1,4 +1,4 @@
-# tuiper
+# rig
 
 A looper with a terminal UI (Bubble Tea), intended to run against a DAW
 (Ableton) via Ableton Link and MIDI. Currently past **Milestone 1: MIDI
@@ -17,19 +17,19 @@ hardware:
 
 | Command | What it does |
 |---|---|
-| `docker compose build` | build the `tuiper-dev` image (Go + gcc + ALSA headers + PipeWire) |
+| `docker compose build` | build the `rig-dev` image (Go + gcc + ALSA headers + PipeWire) |
 | `docker compose run --rm dev` | interactive shell in the container |
-| `docker compose run --rm tuiper -engine test -demo` | TUI on loopback MIDI ports + synthetic events |
-| `docker compose run --rm tuiper -engine test -demo -watch 3s` | headless MIDI smoke test |
-| `docker compose run --rm tuiper -audio 3s` | audio devices + capture meter (silent) |
-| `docker compose run --rm tuiper -audio 3s -loopback` | capture→playback round trip |
+| `docker compose run --rm rig -engine test -demo` | TUI on loopback MIDI ports + synthetic events |
+| `docker compose run --rm rig -engine test -demo -watch 3s` | headless MIDI smoke test |
+| `docker compose run --rm rig -audio 3s` | audio devices + capture meter (silent) |
+| `docker compose run --rm rig -audio 3s -loopback` | capture→playback round trip |
 | `docker compose run --rm dev go test ./internal/...` | run the tests |
 | `docker compose run --rm dev go vet ./...` | vet |
 
 Notes:
 
 - The repo is bind-mounted at `/workspace`; Go's build and module caches
-  live in named volumes (`tuiper_go-build`, `tuiper_go-mod`), so a warm
+  live in named volumes (`rig_go-build`, `rig_go-mod`), so a warm
   `docker compose run` is only a few seconds.
 - The container has no MIDI hardware: use the `test` engine there (this is
   also why `-demo` exists). `rtmidi` compiles fine and simply lists zero
@@ -40,48 +40,35 @@ Notes:
   backend logs land in `/tmp/pipewire.log` inside the container.
 - On a **Linux host** with real MIDI/audio hardware, the `midi` profile
   exposes ALSA and leaves capture routing alone:
-  `docker compose --profile midi run --rm tuiper-alsa -engine rtmidi`.
+  `docker compose --profile midi run --rm rig-alsa -engine rtmidi`.
 - Containers on Windows/macOS hosts cannot receive MIDI/audio hardware:
   WinMM/CoreMIDI/WASAPI endpoints are not exposed by Docker Desktop.
-  Real-hardware testing stays on the host (Windows build below).
+  Real-hardware testing stays on a Linux host with ALSA.
 
-## Requirements (Windows host build)
+## Build (host)
 
-- **Go** >= 1.24
-- **mingw-w64 gcc** for CGO (RtMidi), installed via
-  `winget install BrechtSanders.WinLibs.POSIX.UCRT`. `build.ps1` finds it
-  automatically (on `PATH` or in the WinGet package directory).
-- Optionally **zig** (`winget install zig.zig`) for cross-compiling later;
-  use `.\build.ps1 -Zig` to build with it. Note: the zig path is currently
-  slow on Windows — each rebuild re-runs the full cgo invocation chain and
-  Go's build cache is not reused, so expect ~1–2 minutes per build.
+Requires Go >= 1.24 and a C compiler (gcc) for CGO (RtMidi):
 
-## Build (Windows)
+    make build       # build ./rig
+    make test        # run all tests (root + components module)
+    make vet         # go vet
+    make gallery     # run the component gallery TUI
+    make clean       # remove build artifacts
 
-.\build.ps1            # vet + build tuiper.exe (CGO via mingw gcc)
-.\build.ps1 -Watch     # build, then run a headless demo smoke test
-.\build.ps1 -Zig       # build with zig cc instead (slow, see above)
-
-This outputs `tuiper.exe` in the repo root. The build script enables CGO,
-points `CC`/`CXX` at the mingw gcc compiler, and links the gcc runtimes
-statically (`CGO_LDFLAGS=-static-libstdc++ -static-libgcc -static`) so the
-exe has no mingw DLL dependencies.
-
-For TUI iteration prefer the containerized workflow; the Windows build is
-for real-hardware testing and releases.
+Prefer the containerized workflow below for TUI iteration.
 
 ## Run
 
 | Command | What it does |
 |---|---|
-| `.\tuiper.exe` | TUI on real MIDI ports (RtMidi via CGO: WinMM/CoreMIDI/ALSA) |
-| `.\tuiper.exe -inline` | TUI inline (no alternate screen; above the prompt) |
-| `.\tuiper.exe -engine test` | TUI on fake loopback ports (no hardware or CGO needed) |
-| `.\tuiper.exe -engine test -demo` | Fake ports plus a synthetic event sender |
-| `.\tuiper.exe -watch 5s` | Headless: print events for 5 seconds (smoke test/debugging) |
-| `.\tuiper.exe -audio 5s` | Headless audio: enumerate WASAPI devices, meter default capture |
-| `.\tuiper.exe -audio 5s -loopback` | + feed capture into playback (feedback risk: mic into speakers!) |
-| `.\tuiper.exe -loop 2s` | Headless looper check: record a round trip, play the loop back, verify levels |
+| `.\rig.exe` | TUI on real MIDI ports (RtMidi via CGO: WinMM/CoreMIDI/ALSA) |
+| `.\rig.exe -inline` | TUI inline (no alternate screen; above the prompt) |
+| `.\rig.exe -engine test` | TUI on fake loopback ports (no hardware or CGO needed) |
+| `.\rig.exe -engine test -demo` | Fake ports plus a synthetic event sender |
+| `.\rig.exe -watch 5s` | Headless: print events for 5 seconds (smoke test/debugging) |
+| `.\rig.exe -audio 5s` | Headless audio: enumerate WASAPI devices, meter default capture |
+| `.\rig.exe -audio 5s -loopback` | + feed capture into playback (feedback risk: mic into speakers!) |
+| `.\rig.exe -loop 2s` | Headless looper check: record a round trip, play the loop back, verify levels |
 
 Flags:
 
@@ -128,15 +115,13 @@ status line (`events=… clocks=…`) plus the header activity dots.
 
 ## Project layout
 
-    cmd/tuiper/          entrypoint, flags, headless watch/audio/loop modes
+    cmd/rig/          entrypoint, flags, headless watch/audio/loop modes
     internal/midi/       MIDI Engine (driver owner), Monitor (event stream)
     internal/audio/      audio Engine over miniaudio (capture/playback/duplex/Devices)
     internal/looper/     loop engine: state machine + s16 buffer math (TUI-agnostic)
     internal/ui/         terminal UI: model.go (state/logic), view.go (render),
                          demo.go, audio_panel.go (device dropdowns/meter/monitor/looper)
-    tools/               zig cc CGO wrappers
     scripts/             container entrypoint (PipeWire rig) + its pipewire config
-    build.ps1            Windows build script
     Dockerfile,          containerized Linux dev environment (see README)
     docker-compose.yml
 

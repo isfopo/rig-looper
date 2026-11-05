@@ -1,4 +1,4 @@
-// Package ui implements the tuiper terminal UI: a Bubble Tea based monitor
+// Package ui implements the rig terminal UI: a Bubble Tea based monitor
 // for MIDI and audio devices. It lists MIDI input ports (open one and watch
 // events scroll by) and audio endpoints (device/channel dropdowns, capture
 // meter, monitor path). Keyboard only, no mouse, no config files yet.
@@ -16,47 +16,15 @@ package ui
 
 import (
 	"fmt"
-	"sync/atomic"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"tuiper/internal/looper"
-	"tuiper/internal/midi"
+	lamps "github.com/isfopo/rig-components/lamps"
+	list "github.com/isfopo/rig-components/list"
+
+	"github.com/isfopo/rig-core/looper"
+	"github.com/isfopo/rig-core/midi"
 )
-
-// lamps are the upper-right MIDI activity indicators (dim by default, lit
-// briefly by traffic). Stamps are atomics so the demo sender goroutine can
-// record outgoing sends while Update/View read them.
-type lamps struct {
-	in       atomic.Int64 // last received midi event
-	out      atomic.Int64 // last sent midi event
-	blinking atomic.Bool  // a lamp-off repaint is already scheduled
-}
-
-// lit reports whether a stamp is inside the blink window.
-func (l *lamps) lit(stamp *atomic.Int64) bool {
-	t := stamp.Load()
-	return t > 0 && time.Now().UnixNano()-t < int64(blinkWindow)
-}
-
-// lampOffCmd schedules the repaint that turns a lit lamp back off. The
-// blinking flag debounces: while events keep arriving, one pending repaint is
-// enough; after traffic stops, one extra tick douses the lamp again.
-func lampOffCmd() tea.Cmd {
-	return tea.Tick(blinkWindow, func(time.Time) tea.Msg {
-		return lampOffMsg{}
-	})
-}
-
-// lampOffMsg repaints the header with expired lamps.
-type lampOffMsg struct{}
-
-// newLamps anchors the lamp state so it survives Model value copies.
-func newLamps() *lamps { return &lamps{} }
-
-// blinkWindow is how long a lamp stays lit after observed MIDI traffic.
-const blinkWindow = 250 * time.Millisecond
 
 // Looper defaults: buffer format follows the attached duplex stream; the
 // capacity ceiling silently auto-closes long takes.
@@ -69,9 +37,10 @@ const (
 type Model struct {
 	width, height int
 
-	eng    *midi.Engine // owns the MIDi
-	ports  []string     // input port names; index == port number
-	cursor int          // selected row in ports
+	eng      *midi.Engine // owns the MIDi
+	ports    []string     // input port names; index == port number
+	cursor   int          // selected row in ports (mirrors portList.Cursor)
+	portList list.Model   // component for the port list
 
 	monitor *midi.Monitor
 	openNum int // port number of the active listener, -1 when closed
@@ -84,7 +53,7 @@ type Model struct {
 	// MIDI activity lamps: receive/send stamps (unix nanos) written via
 	// atomics from whichever goroutine observes traffic; View decides bright
 	// vs. dark from the elapsed time since the stamp.
-	lamps *lamps
+	lamps lamps.Model
 
 	events  uint64 // total received
 	clocks  uint64 // timing clock / tick, counted separately (often spammy)
@@ -102,21 +71,22 @@ type Model struct {
 // portOpenedMsg).
 func New(eng *midi.Engine, demo bool) Model {
 	m := Model{
-		eng:     eng,
-		monitor: midi.NewMonitor(eng),
-		demo:    demo,
-		ap:      newAudioPanel(),
-		lamps:   newLamps(),
-		openNum: -1,
-		status:  "ready",
-		height:  24,
-		width:   80,
+		eng:      eng,
+		monitor:  midi.NewMonitor(eng),
+		demo:     demo,
+		ap:       newAudioPanel(),
+		lamps:    lamps.New([]lamps.Spec{{Name: "in", Color: "42"}, {Name: "out", Color: "205"}}, 0),
+		portList: list.New(nil),
+		openNum:  -1,
+		status:   "ready",
+		height:   24,
+		width:    80,
 	}
 	if demo {
 		// created here (not in togglePort): togglePort works on value
 		// copies, so the sender would never reach the rendered model
 		m.demoCtl = NewDemoSender(eng)
-		m.demoCtl.OnSend(func() { m.lamps.out.Store(time.Now().UnixNano()) })
+		m.demoCtl.OnSend(func() { m.lamps.Light("out") })
 	}
 	return m
 }
@@ -219,35 +189,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc":
 			// esc first cancels an open dropdown, and only quits otherwise
-			if m.ap != nil && m.ap.focus != dropNone {
-				m.ap.focus = dropNone
+			if m.ap != nil && m.ap.anyOpen() {
+				m.ap.closeAll()
 				return m, nil
 			}
 			return m, tea.Quit
 
 		case "up", "k":
-			if m.ap != nil && m.ap.focus != dropNone {
+			if m.ap != nil && m.ap.anyOpen() {
 				m.ap.moveCursor(-1)
 				return m, nil
 			}
 			if len(m.ports) > 0 {
-				m.cursor = (m.cursor - 1 + len(m.ports)) % len(m.ports)
+				m.portList = m.portList.Move(-1)
+				m.cursor = m.portList.Cursor
 			}
 			return m, nil
 
 		case "down", "j":
-			if m.ap != nil && m.ap.focus != dropNone {
+			if m.ap != nil && m.ap.anyOpen() {
 				m.ap.moveCursor(1)
 				return m, nil
 			}
 			if len(m.ports) > 0 {
-				m.cursor = (m.cursor + 1) % len(m.ports)
+				m.portList = m.portList.Move(1)
+				m.cursor = m.portList.Cursor
 			}
 			return m, nil
 
 		case "enter", "space":
-			if m.ap != nil && m.ap.focus != dropNone {
-				which := m.ap.focus
+			if m.ap != nil && m.ap.anyOpen() {
+				which := m.ap.openWhich()
 				changed := m.ap.pick()
 				if changed {
 					if which == dropChan && m.ap.looping {
@@ -345,13 +317,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.ports = msg.ports
-		if m.cursor >= len(m.ports) {
-			m.cursor = 0
+		m.portList = m.portList.SetItems(msg.ports)
+		if len(m.ports) == 0 || m.portList.Cursor >= len(m.ports) {
+			m.portList.Cursor = 0
 		}
+		m.cursor = m.portList.Cursor
 		return m, nil
 
 	case portOpenedMsg:
 		m.openNum = msg.num
+		m.portList = m.portList.SetActive(msg.num)
 		m.ok("listening: %s", m.ports[msg.num])
 		cmds := []tea.Cmd{waitForEventCmd(m.monitor.Events())}
 		if m.demo && m.demoCtl != nil {
@@ -365,6 +340,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case portClosedMsg:
 		m.openNum = -1
+		m.portList = m.portList.SetActive(-1)
 		if m.demoCtl != nil {
 			<-m.demoCtl.Stop()
 			m.demoCtl = nil
@@ -380,10 +356,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case eventMsg:
 		return m.updateEvent(msg.Event)
 
-	case lampOffMsg:
-		if m.lamps != nil {
-			m.lamps.blinking.Store(false)
-		}
+	case lamps.LampOffMsg:
+		upd, _ := m.lamps.Update(msg)
+		m.lamps = upd.(lamps.Model)
 		return m, nil // repaint: any lamp whose blink window expired goes dark
 
 	// ---- audio panel -----------------------------------------------------
@@ -395,12 +370,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ap.ins = msg.ins
 		m.ap.outs = msg.outs
 		// re-clamp stored selections against the new lists
-		if m.ap.inSel > len(msg.ins) {
-			m.ap.inSel = 0
+		if m.ap.inDrop.Current > len(msg.ins) {
+			m.ap.inDrop.Current = 0
 		}
-		if m.ap.outSel > len(msg.outs) {
-			m.ap.outSel = 0
+		if m.ap.outDrop.Current > len(msg.outs) {
+			m.ap.outDrop.Current = 0
 		}
+		// rebuild device dropdown option lists now that enumeration arrived
+		inOpts := make([]string, len(m.ap.inOptions()))
+		for i, d := range m.ap.inOptions() {
+			if i == 0 {
+				inOpts[i] = "system default"
+			} else {
+				inOpts[i] = d.Name
+			}
+		}
+		m.ap.inDrop = m.ap.inDrop.SetOptions(inOpts)
+		outOpts := make([]string, len(m.ap.outOptions()))
+		for i, d := range m.ap.outOptions() {
+			if i == 0 {
+				outOpts[i] = "system default"
+			} else {
+				outOpts[i] = d.Name
+			}
+		}
+		m.ap.outDrop = m.ap.outDrop.SetOptions(outOpts)
 		m.ok("audio: %d capture / %d playback devices", len(msg.ins), len(msg.outs))
 		return m, nil
 
@@ -461,33 +455,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // shows as counters plus the activity lamps instead.)
 func (m Model) updateEvent(ev midi.Event) (tea.Model, tea.Cmd) {
 	m.events++
-	if m.lamps != nil {
-		m.lamps.in.Store(time.Now().UnixNano())
-	}
+	m.lamps.Light("in")
 
 	line := ev.String()
 	// Clock spam gets its own counter to keep the log useful
 	if line == "TimingClock" {
 		m.clocks++
-		return m, m.lamps.withLampOff(waitForEventCmd(m.monitor.Events()))
+		return m, m.lamps.WithLampOff(waitForEventCmd(m.monitor.Events()))
 	}
 	m.dropped = m.monitor.Dropped()
-	return m, m.lamps.withLampOff(waitForEventCmd(m.monitor.Events()))
-}
-
-// withLampOff schedules the lamp-dousing repaint if none is pending yet;
-// cmd is otherwise untouched (returned as-is when one is).
-func (l *lamps) withLampOff(cmd tea.Cmd) tea.Cmd {
-	if l == nil {
-		return cmd
-	}
-	if l.blinking.Swap(true) {
-		return cmd // a repaint is already scheduled
-	}
-	if cmd == nil {
-		return lampOffCmd()
-	}
-	return tea.Batch(cmd, lampOffCmd())
+	return m, m.lamps.WithLampOff(waitForEventCmd(m.monitor.Events()))
 }
 
 // togglePort opens the selected port, or closes the active one.

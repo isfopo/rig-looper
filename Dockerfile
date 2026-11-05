@@ -1,4 +1,4 @@
-# tuiper development image
+# rig development image
 #
 # Linux + CGO toolchain (RtMidi needs gcc/g++ and Alsa headers) + Go with its
 # caches in named volumes so rebuilds stay fast between container runs.
@@ -7,7 +7,7 @@
 # scripts/container-entrypoint.sh starts a private daemon (before the
 # compose services' command), so audio and MIDI code gets real ALSA devices
 # sink/monitor capture with no host hardware. See docker-compose.yml for the
-# entrypoint wiring, and the -audio/-loopback flags of tuiper for the
+# entrypoint wiring, and the -audio/-loopback flags of rig for the
 # milestone-2 audio I/O checks.
 FROM golang:1.27-bookworm
 

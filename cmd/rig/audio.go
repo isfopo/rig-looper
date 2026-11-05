@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"tuiper/internal/audio"
-	"tuiper/internal/looper"
+	"github.com/isfopo/rig-core/audio"
+	"github.com/isfopo/rig-core/looper"
 )
 
 // runAudio lists devices and meters the default capture input for d. With
@@ -25,19 +25,19 @@ import (
 func runAudio(d time.Duration, loopback bool) int {
 	eng, err := audio.NewEngine()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: audio:", err)
+		fmt.Fprintln(os.Stderr, "rig: audio:", err)
 		return 1
 	}
 	defer eng.Close()
 
 	ins, err := eng.Inputs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: audio:", err)
+		fmt.Fprintln(os.Stderr, "rig: audio:", err)
 		return 1
 	}
 	outs, err := eng.Outputs()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: audio:", err)
+		fmt.Fprintln(os.Stderr, "rig: audio:", err)
 		return 1
 	}
 
@@ -50,7 +50,7 @@ func runAudio(d time.Duration, loopback bool) int {
 	}
 	if len(ins) == 0 || (len(outs) == 0 && loopback) {
 		// without a default device there is nothing meaningful to route
-		fmt.Fprintln(os.Stderr, "tuiper: audio: need at least one default capture device (and playback, for -loopback)")
+		fmt.Fprintln(os.Stderr, "rig: audio: need at least one default capture device (and playback, for -loopback)")
 		return 1
 	}
 
@@ -72,7 +72,7 @@ func runAudio(d time.Duration, loopback bool) int {
 			}
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "tuiper: audio:", err)
+			fmt.Fprintln(os.Stderr, "rig: audio:", err)
 			return 1
 		}
 	}
@@ -100,7 +100,7 @@ func runAudio(d time.Duration, loopback bool) int {
 		}
 	})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: audio:", err)
+		fmt.Fprintln(os.Stderr, "rig: audio:", err)
 		if pStream != nil {
 			pStream.Stop()
 		}
@@ -143,7 +143,7 @@ func runAudio(d time.Duration, loopback bool) int {
 	}
 	fmt.Println()
 	if f == 0 {
-		fmt.Fprintln(os.Stderr, "tuiper: audio: capture produced no data")
+		fmt.Fprintln(os.Stderr, "rig: audio: capture produced no data")
 		return 1
 	}
 	return 0
@@ -186,14 +186,14 @@ func printMeterBar(peak int16, frames int64) {
 func runLoop(d time.Duration) int {
 	eng, err := audio.NewEngine()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: loop:", err)
+		fmt.Fprintln(os.Stderr, "rig: loop:", err)
 		return 1
 	}
 	defer eng.Close()
 
 	ins, err := eng.Inputs()
 	if err != nil || len(ins) == 0 {
-		fmt.Fprintln(os.Stderr, "tuiper: loop: no capture device")
+		fmt.Fprintln(os.Stderr, "rig: loop: no capture device")
 		return 1
 	}
 
@@ -226,7 +226,7 @@ func runLoop(d time.Duration) int {
 		}
 	})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tuiper: loop:", err)
+		fmt.Fprintln(os.Stderr, "rig: loop:", err)
 		return 1
 	}
 
@@ -263,12 +263,12 @@ func runLoop(d time.Duration) int {
 	loopPeak := audio.Peak(got)
 	fmt.Printf("loop level: peak %.1f dBFS\n", audio.ToDbFS(loopPeak))
 	if l.FramesInLoop() == 0 {
-		fmt.Fprintln(os.Stderr, "tuiper: loop: the take is empty")
+		fmt.Fprintln(os.Stderr, "rig: loop: the take is empty")
 		return 1
 	}
 	if audio.ToDbFS(loopPeak) < -50 {
 		fmt.Fprintln(os.Stderr,
-			"tuiper: loop: round trip delivered silence (check the capture route)")
+			"rig: loop: round trip delivered silence (check the capture route)")
 		return 1
 	}
 	fmt.Println("looper: round trip OK")

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Container entrypoint for the tuiper dev compose services.
+# Container entrypoint for the rig dev compose services.
 #
 # Starts a private PipeWire session (audio + MIDI) so audio engine code has
 # real ALSA devices and sink/monitor capture with no host hardware, then
@@ -7,9 +7,9 @@
 #
 #   docker compose run --rm dev                          -> exec bash
 #   docker compose run --rm dev go test ./internal/...   -> exec go test ...
-#   docker compose run --rm tuiper -engine test -demo    -> exec go run ./cmd/tuiper ...
+#   docker compose run --rm rig -engine test -demo    -> exec go run ./cmd/rig ...
 #                                           ^ a leading flag is taken as a
-#                                             tuiper flag and wrapped in go run
+#                                             rig flag and wrapped in go run
 set -u
 
 if command -v pipewire >/dev/null 2>&1; then
@@ -31,14 +31,14 @@ if command -v pipewire >/dev/null 2>&1; then
         sed -i 's/\["with-logind"\] = true/["with-logind"] = false/' "$BLUEZ_CFG"
     fi
 
-    # Virtual loopback rig (see scripts/pipewire/tuiper-audio.conf):
-    # tuiper-sink is the default playback target, and captures record its
+    # Virtual loopback rig (see scripts/pipewire/rig-audio.conf):
+    # rig-sink is the default playback target, and captures record its
     # monitor ports. Only for container audio (the `midi` profile's
-    # tuiper-alsa service mounts /dev/snd and keeps normal routing).
+    # rig-alsa service mounts /dev/snd and keeps normal routing).
     PW_USER_CONF=${XDG_CONFIG_HOME:-/root/.config}/pipewire/pipewire.conf.d
     mkdir -p "$PW_USER_CONF"
-    if [ -f /workspace/scripts/pipewire/tuiper-audio.conf ]; then
-        cp /workspace/scripts/pipewire/tuiper-audio.conf "$PW_USER_CONF/tuiper-audio.conf"
+    if [ -f /workspace/scripts/pipewire/rig-audio.conf ]; then
+        cp /workspace/scripts/pipewire/rig-audio.conf "$PW_USER_CONF/rig-audio.conf"
     fi
 
     pipewire >/tmp/pipewire.log 2>&1 &
@@ -60,17 +60,17 @@ if command -v pipewire >/dev/null 2>&1; then
 
     # Route ALSA plugin clients: play to the null sink, capture its monitor.
     # WirePlumber 0.4's policy needs stream.capture.sink for that (see
-    # scripts/pipewire/tuiper-audio.conf header). Skip with real hardware.
+    # scripts/pipewire/rig-audio.conf header). Skip with real hardware.
     if [ ! -d /dev/snd ]; then
-        export PIPEWIRE_NODE=tuiper-sink
+        export PIPEWIRE_NODE=rig-sink
         export PIPEWIRE_ALSA="stream.capture.sink = true"
     fi
 fi
 
-# leading flag (e.g. -engine/-audio/-watch from `compose run tuiper ...`)
-# means "run the tuiper binary with these flags"
+# leading flag (e.g. -engine/-audio/-watch from `compose run rig ...`)
+# means "run the rig binary with these flags"
 if [ $# -gt 0 ] && [ "${1#-}" != "$1" ]; then
-    set -- go run ./cmd/tuiper "$@"
+    set -- go run ./cmd/rig "$@"
 fi
 
 if [ $# -eq 0 ]; then
