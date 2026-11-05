@@ -30,7 +30,7 @@ import (
 	dropdown "github.com/isfopo/rig-components/dropdown"
 
 	"github.com/isfopo/rig-core/audio"
-	"github.com/isfopo/rig-core/looper"
+	"github.com/isfopo/rig-looper/internal/looper"
 )
 
 // dropdown subjects

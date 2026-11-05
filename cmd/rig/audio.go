@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/isfopo/rig-core/audio"
-	"github.com/isfopo/rig-core/looper"
+	"github.com/isfopo/rig-looper/internal/looper"
 )
 
 // runAudio lists devices and meters the default capture input for d. With

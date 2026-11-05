@@ -22,7 +22,7 @@ import (
 	lamps "github.com/isfopo/rig-components/lamps"
 	list "github.com/isfopo/rig-components/list"
 
-	"github.com/isfopo/rig-core/looper"
+	"github.com/isfopo/rig-looper/internal/looper"
 	"github.com/isfopo/rig-core/midi"
 )
 

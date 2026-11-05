@@ -1,4 +1,4 @@
-module rig
+module github.com/isfopo/rig-looper
 
 go 1.24.2
 

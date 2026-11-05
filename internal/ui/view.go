@@ -8,7 +8,7 @@ import (
 
 	meter "github.com/isfopo/rig-components/meter"
 
-	"github.com/isfopo/rig-core/looper"
+	"github.com/isfopo/rig-looper/internal/looper"
 )
 
 // view styles. Kept deliberately plain: faint the chrome, bright the events.

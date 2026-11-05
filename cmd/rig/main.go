@@ -23,7 +23,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/isfopo/rig-core/midi"
-	"rig/internal/ui"
+	"github.com/isfopo/rig-looper/internal/ui"
 )
 
 func main() {
