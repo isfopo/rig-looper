@@ -22,8 +22,8 @@ import (
 	lamps "github.com/isfopo/rig-components/lamps"
 	list "github.com/isfopo/rig-components/list"
 
-	"github.com/isfopo/rig-looper/internal/looper"
 	"github.com/isfopo/rig-core/midi"
+	"github.com/isfopo/rig-looper/internal/looper"
 )
 
 // Looper defaults: buffer format follows the attached duplex stream; the
@@ -103,7 +103,7 @@ func (m Model) Shutdown() *midi.Engine {
 		m.monitor.Stop()
 	}
 	if m.ap != nil {
-		m.ap.shutdown()
+		m.ap.Shutdown()
 	}
 	return m.eng
 }
@@ -189,15 +189,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc":
 			// esc first cancels an open dropdown, and only quits otherwise
-			if m.ap != nil && m.ap.anyOpen() {
-				m.ap.closeAll()
+			if m.ap != nil && m.ap.AnyOpen() {
+				m.ap.CloseAll()
 				return m, nil
 			}
 			return m, tea.Quit
 
 		case "up", "k":
-			if m.ap != nil && m.ap.anyOpen() {
-				m.ap.moveCursor(-1)
+			if m.ap != nil && m.ap.AnyOpen() {
+				m.ap.MoveCursor(-1)
 				return m, nil
 			}
 			if len(m.ports) > 0 {
@@ -207,8 +207,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "down", "j":
-			if m.ap != nil && m.ap.anyOpen() {
-				m.ap.moveCursor(1)
+			if m.ap != nil && m.ap.AnyOpen() {
+				m.ap.MoveCursor(1)
 				return m, nil
 			}
 			if len(m.ports) > 0 {
@@ -218,21 +218,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter", "space":
-			if m.ap != nil && m.ap.anyOpen() {
-				which := m.ap.openWhich()
-				changed := m.ap.pick()
+			if m.ap != nil && m.ap.AnyOpen() {
+				which := m.ap.OpenWhich()
+				changed := m.ap.Pick()
 				if changed {
 					if which == dropChan && m.ap.looping {
 						// the loop buffer's channel layout is fixed at
 						// attach time; a change re-creates it (loop lost,
 						// and the status line says so)
-						m.ap.loop = looper.New(int(m.ap.channels()),
+						m.ap.loop = looper.New(int(m.ap.Channels()),
 							loopSampleRate, loopMaxSeconds)
 						m.ok("looper re-created (%d ch; loop cleared)",
-							int(m.ap.channels()))
+							int(m.ap.Channels()))
 					}
-					m.ap.prepareRestart()
-					return m, m.ap.restartAfterChange()
+					m.ap.PrepareRestart()
+					return m, m.ap.RestartAfterChange()
 				}
 				return m, nil
 			}
@@ -242,15 +242,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.ap == nil {
 				return m, nil
 			}
-			if m.ap.eng == nil {
-				m.fail("audio unavailable: %v", m.ap.initErr)
+			if m.ap.Eng == nil {
+				m.fail("audio unavailable: %v", m.ap.InitErr)
 				return m, nil
 			}
-			m.ap.toggleDropdown(map[string]int{"i": dropIn, "o": dropOut, "c": dropChan}[msg.String()])
-			if m.ap.ins == nil && m.ap.outs == nil {
+			m.ap.ToggleDropdown(map[string]int{"i": dropIn, "o": dropOut, "c": dropChan}[msg.String()])
+			if m.ap.Ins == nil && m.ap.Outs == nil {
 				// first audio interaction: enumerate in the background;
 				// the dropdown opens immediately and fills on arrival
-				return m, m.ap.listCmd()
+				return m, m.ap.ListCmd()
 			}
 			return m, nil
 
@@ -265,23 +265,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.ap == nil {
 				return m, nil
 			}
-			if m.ap.eng == nil {
-				m.fail("audio unavailable: %v", m.ap.initErr)
+			if m.ap.Eng == nil {
+				m.fail("audio unavailable: %v", m.ap.InitErr)
 				return m, nil
 			}
 			if !m.ap.looping {
 				// attach: the looper takes over the selected endpoints (the
 				// monitor path goes off; it needs both ends for itself)
-				if m.ap.monitor {
-					m.ap.monitor = false
+				if m.ap.Monitor {
+					m.ap.Monitor = false
 					m.ok("audio monitor off (looper takes over)")
 				}
-				m.ap.stopSimplex()
+				m.ap.StopSimplex()
 				if m.ap.loop == nil {
-					m.ap.loop = looper.New(int(m.ap.channels()),
+					m.ap.loop = looper.New(int(m.ap.Channels()),
 						loopSampleRate, loopMaxSeconds)
 				}
-				return m, m.ap.looperRestartCmd()
+				return m, m.ap.LooperRestartCmd()
 			}
 			switch st := m.ap.loop.Toggle(); st.String() {
 			case "rec":
@@ -306,7 +306,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			cmds := []tea.Cmd{m.portsCmd()}
 			if m.ap != nil {
-				cmds = append(cmds, m.ap.listCmd())
+				cmds = append(cmds, m.ap.ListCmd())
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -367,70 +367,70 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ap == nil {
 			return m, nil
 		}
-		m.ap.ins = msg.ins
-		m.ap.outs = msg.outs
+		m.ap.Ins = msg.Ins
+		m.ap.Outs = msg.Outs
 		// re-clamp stored selections against the new lists
-		if m.ap.inDrop.Current > len(msg.ins) {
-			m.ap.inDrop.Current = 0
+		if m.ap.InDrop.Current > len(msg.Ins) {
+			m.ap.InDrop.Current = 0
 		}
-		if m.ap.outDrop.Current > len(msg.outs) {
-			m.ap.outDrop.Current = 0
+		if m.ap.OutDrop.Current > len(msg.Outs) {
+			m.ap.OutDrop.Current = 0
 		}
 		// rebuild device dropdown option lists now that enumeration arrived
-		inOpts := make([]string, len(m.ap.inOptions()))
-		for i, d := range m.ap.inOptions() {
+		inOpts := make([]string, len(m.ap.InOptions()))
+		for i, d := range m.ap.InOptions() {
 			if i == 0 {
 				inOpts[i] = "system default"
 			} else {
 				inOpts[i] = d.Name
 			}
 		}
-		m.ap.inDrop = m.ap.inDrop.SetOptions(inOpts)
-		outOpts := make([]string, len(m.ap.outOptions()))
-		for i, d := range m.ap.outOptions() {
+		m.ap.InDrop = m.ap.InDrop.SetOptions(inOpts)
+		outOpts := make([]string, len(m.ap.OutOptions()))
+		for i, d := range m.ap.OutOptions() {
 			if i == 0 {
 				outOpts[i] = "system default"
 			} else {
 				outOpts[i] = d.Name
 			}
 		}
-		m.ap.outDrop = m.ap.outDrop.SetOptions(outOpts)
-		m.ok("audio: %d capture / %d playback devices", len(msg.ins), len(msg.outs))
+		m.ap.OutDrop = m.ap.OutDrop.SetOptions(outOpts)
+		m.ok("audio: %d capture / %d playback devices", len(msg.Ins), len(msg.Outs))
 		return m, nil
 
 	case audioErrMsg:
 		if m.ap == nil {
 			return m, nil
 		}
-		m.fail("audio: %v", msg.err)
+		m.fail("audio: %v", msg.Err)
 		return m, nil
 
 	case captureStartedMsg:
 		if m.ap == nil {
 			return m, nil
 		}
-		m.ap.capStream = msg.stream
-		m.ap.capturing = true
+		m.ap.CapStream = msg.Stream
+		m.ap.Capturing = true
 		// the monitor gate opens fully only once playback is up too
-		m.ap.monOn.Store(m.ap.monitor && m.ap.playStream != nil)
-		m.ok("audio capture: %s (%d ch)", m.ap.inName(), m.ap.channels())
+		m.ap.MonOn.Store(m.ap.Monitor && m.ap.PlayStream != nil)
+		m.ok("audio capture: %s (%d ch)", m.ap.InName(), m.ap.Channels())
 		return m, meterTickCmd()
 
 	case playbackStartedMsg:
 		if m.ap == nil {
 			return m, nil
 		}
-		m.ap.playStream = msg.stream
-		m.ap.monOn.Store(m.ap.monitor)
-		m.ok("audio monitor: %s → %s", m.ap.inName(), m.ap.outName())
+		m.ap.PlayStream = msg.Stream
+		m.ap.MonOn.Store(m.ap.Monitor)
+		m.ok("audio monitor: %s → %s", m.ap.InName(), m.ap.OutName())
 		return m, nil
 
 	case audioMeterMsg:
 		if m.ap == nil {
 			return m, nil
 		}
-		m.ap.takeMeter()
-		if m.ap.metering() {
+		m.ap.TakeMeter()
+		if m.ap.Metering() {
 			return m, meterTickCmd()
 		}
 		return m, nil
@@ -439,11 +439,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ap == nil {
 			return m, nil
 		}
-		m.ap.loopStream = msg.stream
+		m.ap.loopStream = msg.Stream
 		m.ap.looping = true
-		m.ap.capturing = false
-		m.ap.monOn.Store(false)
-		m.ok("looper attached: %s → %s (l rec, x clear)", m.ap.inName(), m.ap.outName())
+		m.ap.Capturing = false
+		m.ap.MonOn.Store(false)
+		m.ok("looper attached: %s → %s (l rec, x clear)", m.ap.InName(), m.ap.OutName())
 		return m, meterTickCmd()
 	}
 
@@ -492,22 +492,22 @@ func (m Model) toggleMonitor() (tea.Model, tea.Cmd) {
 	if m.ap == nil {
 		return m, nil
 	}
-	if m.ap.eng == nil {
-		m.fail("audio unavailable: %v", m.ap.initErr)
+	if m.ap.Eng == nil {
+		m.fail("audio unavailable: %v", m.ap.InitErr)
 		return m, nil
 	}
-	m.ap.monitor = !m.ap.monitor
-	if m.ap.monitor {
-		m.ap.monOn.Store(false)
-		m.ap.prepareRestart()
+	m.ap.Monitor = !m.ap.Monitor
+	if m.ap.Monitor {
+		m.ap.MonOn.Store(false)
+		m.ap.PrepareRestart()
 		m.ok("audio monitor on (beware feedback on real hardware)")
-		return m, m.ap.restartCmd()
+		return m, m.ap.RestartCmd()
 	}
-	if m.ap.playStream != nil {
-		m.ap.playStream.Stop()
-		m.ap.playStream = nil
+	if m.ap.PlayStream != nil {
+		m.ap.PlayStream.Stop()
+		m.ap.PlayStream = nil
 	}
-	m.ap.monOn.Store(false)
+	m.ap.MonOn.Store(false)
 	m.ok("audio: monitor off")
 	return m, nil
 }

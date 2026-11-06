@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	audiopanel "github.com/isfopo/rig-components/audiopanel"
+
 	"github.com/isfopo/rig-core/audio"
 )
 
@@ -11,32 +13,32 @@ import (
 // backend: default entry first, navigation wraps, pick records the target
 // selection and reports whether it actually moved.
 func TestDropdownNavigation(t *testing.T) {
-	ap := &audioPanel{}
-	ap.ins = []audio.Device{{Name: "A"}, {Name: "B"}}
-	ap.outs = []audio.Device{{Name: "Out"}}
+	ap := &audioPanel{Panel: &audiopanel.Panel{}}
+	ap.Ins = []audio.Device{{Name: "A"}, {Name: "B"}}
+	ap.Outs = []audio.Device{{Name: "Out"}}
 
-	inOpts := make([]string, len(ap.inOptions()))
-	for i, d := range ap.inOptions() {
+	inOpts := make([]string, len(ap.InOptions()))
+	for i, d := range ap.InOptions() {
 		if i == 0 {
 			inOpts[i] = "system default"
 		} else {
 			inOpts[i] = d.Name
 		}
 	}
-	ap.inDrop = ap.inDrop.SetOptions(inOpts)
+	ap.InDrop = ap.InDrop.SetOptions(inOpts)
 
-	outOpts := make([]string, len(ap.outOptions()))
-	for i, d := range ap.outOptions() {
+	outOpts := make([]string, len(ap.OutOptions()))
+	for i, d := range ap.OutOptions() {
 		if i == 0 {
 			outOpts[i] = "system default"
 		} else {
 			outOpts[i] = d.Name
 		}
 	}
-	ap.outDrop = ap.outDrop.SetOptions(outOpts)
+	ap.OutDrop = ap.OutDrop.SetOptions(outOpts)
 
 	// options list: synthetic "system default" first
-	opts := ap.inOptions()
+	opts := ap.InOptions()
 	if len(opts) != 3 || opts[0].Name != "system default" {
 		t.Fatalf("inOptions = %+v, want default + 2 entries", opts)
 	}
@@ -45,35 +47,35 @@ func TestDropdownNavigation(t *testing.T) {
 	}
 
 	// open in-dropdown: cursor starts on the current selection (default)
-	ap.toggleDropdown(dropIn)
-	if ap.openWhich() != dropIn || ap.inDrop.Cursor != 0 || ap.dropdownCount() != 3 {
-		t.Fatalf("open state: which=%d cursor=%d count=%d", ap.openWhich(), ap.inDrop.Cursor, ap.dropdownCount())
+	ap.ToggleDropdown(dropIn)
+	if ap.OpenWhich() != dropIn || ap.InDrop.Cursor != 0 || ap.DropdownCount() != 3 {
+		t.Fatalf("open state: which=%d cursor=%d count=%d", ap.OpenWhich(), ap.InDrop.Cursor, ap.DropdownCount())
 	}
 
 	// wrap-around navigation
-	ap.moveCursor(-1)
-	if ap.inDrop.Cursor != 2 {
-		t.Fatalf("cursor %d, want wrapped to 2", ap.inDrop.Cursor)
+	ap.MoveCursor(-1)
+	if ap.InDrop.Cursor != 2 {
+		t.Fatalf("cursor %d, want wrapped to 2", ap.InDrop.Cursor)
 	}
-	ap.moveCursor(2)
-	if ap.inDrop.Cursor != 1 {
-		t.Fatalf("cursor %d, want 1", ap.inDrop.Cursor)
+	ap.MoveCursor(2)
+	if ap.InDrop.Cursor != 1 {
+		t.Fatalf("cursor %d, want 1", ap.InDrop.Cursor)
 	}
 
 	// pick selects and reports the change
-	if !ap.pick() {
+	if !ap.Pick() {
 		t.Fatal("pick should report a changed selection")
 	}
-	if ap.inDrop.Current != 1 || ap.openWhich() != dropNone {
-		t.Fatalf("after pick: inDrop.Current=%d which=%d", ap.inDrop.Current, ap.openWhich())
+	if ap.InDrop.Current != 1 || ap.OpenWhich() != dropNone {
+		t.Fatalf("after pick: inDrop.Current=%d which=%d", ap.InDrop.Current, ap.OpenWhich())
 	}
 
 	// reopening starts on the stored selection; picking it again changes nothing
-	ap.toggleDropdown(dropIn)
-	if ap.inDrop.Cursor != 1 {
-		t.Fatalf("cursor %d, want restored selection 1", ap.inDrop.Cursor)
+	ap.ToggleDropdown(dropIn)
+	if ap.InDrop.Cursor != 1 {
+		t.Fatalf("cursor %d, want restored selection 1", ap.InDrop.Cursor)
 	}
-	if ap.pick() {
+	if ap.Pick() {
 		t.Fatal("re-picking the same entry should report no change")
 	}
 
@@ -82,22 +84,22 @@ func TestDropdownNavigation(t *testing.T) {
 	for i, c := range channelCounts {
 		chanOpts[i] = fmt.Sprintf("%d channels", c)
 	}
-	ap.chanDrop = ap.chanDrop.SetOptions(chanOpts)
-	ap.toggleDropdown(dropChan)
-	ap.moveCursor(1)
-	if !ap.pick() || ap.chanDrop.Current != chanMono {
-		t.Fatalf("channels pick: chans=%d", ap.chanDrop.Current)
+	ap.ChanDrop = ap.ChanDrop.SetOptions(chanOpts)
+	ap.ToggleDropdown(dropChan)
+	ap.MoveCursor(1)
+	if !ap.Pick() || ap.ChanDrop.Current != chanMono {
+		t.Fatalf("channels pick: chans=%d", ap.ChanDrop.Current)
 	}
-	if ap.channels() != 1 {
-		t.Fatalf("channels() = %d, want 1", ap.channels())
+	if ap.Channels() != 1 {
+		t.Fatalf("channels() = %d, want 1", ap.Channels())
 	}
 
 	// out-dropdown with 2 entries: re-picking default reports no change
-	ap.toggleDropdown(dropOut)
-	if ap.dropdownCount() != 2 {
-		t.Fatalf("out dropdown count = %d, want 2", ap.dropdownCount())
+	ap.ToggleDropdown(dropOut)
+	if ap.DropdownCount() != 2 {
+		t.Fatalf("out dropdown count = %d, want 2", ap.DropdownCount())
 	}
-	if ap.pick() {
+	if ap.Pick() {
 		t.Fatal("re-picking default out should report no change")
 	}
 
@@ -105,5 +107,3 @@ func TestDropdownNavigation(t *testing.T) {
 		t.Fatal("audio.Peak should give the max magnitude")
 	}
 }
-
-

@@ -84,15 +84,15 @@ func audioLinesOf(m Model) int {
 	if m.ap == nil {
 		return 0
 	}
-	if m.ap.eng == nil {
+	if m.ap.Eng == nil {
 		return 2 // heading + error line
 	}
 	n := 1 + 3 // heading + in/out/chan rows
 	if m.ap.looping && m.ap.loop != nil {
 		n++ // looper status row
 	}
-	if m.ap.anyOpen() {
-		n += m.ap.dropdownCount() + 1 // options + controls hint
+	if m.ap.AnyOpen() {
+		n += m.ap.DropdownCount() + 1 // options + controls hint
 	}
 	return n
 }
@@ -107,25 +107,25 @@ func (m Model) audioView(b *strings.Builder) {
 	write := func(s string) { b.WriteString(s + "\n") }
 
 	heading := "audio"
-	if m.ap.eng == nil {
+	if m.ap.Eng == nil {
 		write(headingStyle.Render(heading))
-		write("  " + errStyle.Render("(unavailable: "+m.ap.initErr.Error()+")"))
+		write("  " + errStyle.Render("(unavailable: "+m.ap.InitErr.Error()+")"))
 		return
 	}
 
 	write(headingStyle.Render(heading + " (i in • o out • c channels • m monitor • l looper • x clear)"))
 
 	// in row: selection + live meter
-	inRow := "  in : " + m.ap.inName() + "  " + meter.Bar(m.ap.dispPeak, m.ap.dispFrames, m.ap.dispDrops)
-	write(m.markRow(dropIn, inRow, m.ap.capturing))
+	inRow := "  in : " + m.ap.InName() + "  " + meter.Bar(m.ap.DispPeak, m.ap.DispFrames, m.ap.DispDrops)
+	write(m.markRow(dropIn, inRow, m.ap.Capturing))
 
-	outRow := "  out: " + m.ap.outName()
-	if m.ap.monitor {
+	outRow := "  out: " + m.ap.OutName()
+	if m.ap.Monitor {
 		outRow += "   [monitor → on]"
 	}
-	write(m.markRow(dropOut, outRow, m.ap.playStream != nil))
+	write(m.markRow(dropOut, outRow, m.ap.PlayStream != nil))
 
-	chanName := map[int]string{chanStereo: "stereo (2)", chanMono: "mono (1)"}[m.ap.chanDrop.Current]
+	chanName := map[int]string{chanStereo: "stereo (2)", chanMono: "mono (1)"}[m.ap.ChanDrop.Current]
 	write(m.markRow(dropChan, "  chan: "+chanName, false))
 
 	if m.ap.looping && m.ap.loop != nil {
@@ -133,13 +133,13 @@ func (m Model) audioView(b *strings.Builder) {
 	}
 
 	// expanded dropdown: the option list of the focused row
-	switch m.ap.openWhich() {
+	switch m.ap.OpenWhich() {
 	case dropIn:
-		b.WriteString(m.ap.inDrop.View())
+		b.WriteString(m.ap.InDrop.View())
 	case dropOut:
-		b.WriteString(m.ap.outDrop.View())
+		b.WriteString(m.ap.OutDrop.View())
 	case dropChan:
-		b.WriteString(m.ap.chanDrop.View())
+		b.WriteString(m.ap.ChanDrop.View())
 	default:
 		return
 	}
@@ -161,7 +161,7 @@ func (m Model) loopRow() string {
 // mark. It highlights the row whose dropdown is currently open.
 func (m Model) markRow(dropdown int, row string, active bool) string {
 	name := row
-	if m.ap.openWhich() == dropdown {
+	if m.ap.OpenWhich() == dropdown {
 		name = "  > " + selectedStyle.Render(strings.TrimPrefix(row, "  "))
 	} else if active {
 		name += " " + openMarkStyle.Render("•")
@@ -222,7 +222,7 @@ func (m Model) statusBar() string {
 	b.WriteString(okStyle.Render(fmt.Sprintf("events=%d clocks=%d dropped=%d", m.events, m.clocks, m.dropped)))
 	b.WriteString("  ")
 	if m.ap != nil {
-		b.WriteString(m.ap.chip())
+		b.WriteString(m.ap.Chip())
 	}
 	b.WriteString("  ")
 	if m.isErr {
