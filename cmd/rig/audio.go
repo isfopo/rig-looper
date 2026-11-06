@@ -23,7 +23,7 @@ import (
 // reason. In the container the rig routes capture to a null sink's monitor,
 // so loopback is silent-safe.
 func runAudio(d time.Duration, loopback bool) int {
-	eng, err := audio.NewEngine()
+	eng, err := audio.NewEngineWithName("rig-looper")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: audio:", err)
 		return 1
@@ -63,7 +63,7 @@ func runAudio(d time.Duration, loopback bool) int {
 
 	var pStream *audio.Stream
 	if loopback {
-		pStream, err = eng.OpenPlayback(audio.Options{}, func(n int) []int16 {
+		pStream, err = eng.OpenPlayback(audio.Options{PlaybackName: "rig-looper:out"}, func(n int) []int16 {
 			select {
 			case b := <-blocks:
 				return b
@@ -77,7 +77,7 @@ func runAudio(d time.Duration, loopback bool) int {
 		}
 	}
 
-	cStream, err := eng.OpenCapture(audio.Options{}, func(in []int16) {
+	cStream, err := eng.OpenCapture(audio.Options{CaptureName: "rig-looper:in"}, func(in []int16) {
 		frames.Add(int64(len(in) / 2))
 		p := audio.Peak(in)
 		for {
@@ -184,7 +184,7 @@ func printMeterBar(peak int16, frames int64) {
 // It fails when the take is empty or the loop level is in the noise (-50
 // dBFS floor): either means the duplex round trip delivered nothing.
 func runLoop(d time.Duration) int {
-	eng, err := audio.NewEngine()
+	eng, err := audio.NewEngineWithName("rig-looper")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: loop:", err)
 		return 1
@@ -210,7 +210,7 @@ func runLoop(d time.Duration) int {
 	}
 	tonePos := 0
 
-	stream, err := eng.OpenDuplex(audio.Options{}, func(out, in []int16) {
+	stream, err := eng.OpenDuplex(audio.Options{CaptureName: "rig-looper:in", PlaybackName: "rig-looper:out"}, func(out, in []int16) {
 		if out != nil {
 			if src := l.Playback(len(out)); src != nil {
 				copy(out, src)

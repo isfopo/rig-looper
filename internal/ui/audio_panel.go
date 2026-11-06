@@ -50,8 +50,8 @@ type audioPanel struct {
 	loopStream *audio.Stream
 }
 
-func newAudioPanel() *audioPanel {
-	return &audioPanel{Panel: audiopanel.New()}
+func newAudioPanel(appName string) *audioPanel {
+	return &audioPanel{Panel: audiopanel.New(appName)}
 }
 
 // deviceIDFor resolves a dropdown selection to an Options.DeviceID.
@@ -73,6 +73,8 @@ func (ap *audioPanel) LooperRestartCmd() tea.Cmd {
 		DeviceID:     deviceIDFor(ap.InOptions(), ap.InDrop.Current),
 		PlayDeviceID: deviceIDFor(ap.OutOptions(), ap.OutDrop.Current),
 		Channels:     ap.Channels(),
+		CaptureName:  streamName(ap.Panel.AppName, "in"),
+		PlaybackName: streamName(ap.Panel.AppName, "out"),
 	}
 	return func() tea.Msg {
 		stream, err := ap.Eng.OpenDuplex(opts, ap.loopHandle)
@@ -164,4 +166,12 @@ func (ap *audioPanel) Shutdown() {
 // meterTickCmd keeps the meter subplot refreshing while capture runs.
 func meterTickCmd() tea.Cmd {
 	return audiopanel.MeterTickCmd()
+}
+
+
+func streamName(app, direction string) string {
+	if app == "" {
+		return ""
+	}
+	return app + ":" + direction
 }

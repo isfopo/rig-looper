@@ -74,7 +74,7 @@ func New(eng *midi.Engine, demo bool) Model {
 		eng:      eng,
 		monitor:  midi.NewMonitor(eng),
 		demo:     demo,
-		ap:       newAudioPanel(),
+		ap:       newAudioPanel("rig-looper"),
 		lamps:    lamps.New([]lamps.Spec{{Name: "in", Color: "42"}, {Name: "out", Color: "205"}}, 0),
 		portList: list.New(nil),
 		openNum:  -1,
