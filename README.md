@@ -51,4 +51,4 @@ Requires Go >= 1.24 and a C compiler for CGO (RtMidi):
     components/       rig-components submodule
     scripts/          container entrypoint and PipeWire configuration
 
-See `NOTES.md` for build and packaging notes.
+See the top-level `AGENTS.md` for build and packaging notes.
