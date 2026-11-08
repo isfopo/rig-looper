@@ -1,3 +1,11 @@
 .serena/
 .tmp/
-rig
+# build output
+/build/
+# stray binaries (precise; avoid broad "rig" which ignores cmd/rig)
+/rig
+/rig.exe
+/rig-looper
+/rig-looper.exe
+/rig-meter
+/rig-meter.exe

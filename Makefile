@@ -4,7 +4,7 @@
 # CGO is required by the rtmidi driver. On Linux install build-essential;
 # in the dev container it is already present.
 
-BINARY := rig-looper
+BINARY := build/rig-looper
 GO     := go
 
 .PHONY: all build test vet fmt gallery golden-update clean run dev
@@ -13,6 +13,7 @@ all: build
 
 ## build: compile the rig binary
 build:
+	@mkdir -p build
 	CGO_ENABLED=1 $(GO) build -o $(BINARY) ./cmd/rig
 
 ## test: run all tests (root + components module)
@@ -49,5 +50,5 @@ dev:
 
 ## clean: remove build artifacts
 clean:
-	rm -f $(BINARY) rig.exe
+	rm -rf build
 	cd components && rm -f gallery
