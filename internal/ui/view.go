@@ -15,7 +15,7 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("205")).
+			Foreground(lipgloss.Color("magenta")).
 			MarginRight(2)
 
 	headingStyle = lipgloss.NewStyle().
@@ -23,17 +23,17 @@ var (
 
 	selectedStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("212"))
+			Foreground(lipgloss.Color("magenta"))
 
 	openMarkStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("42"))
+			Foreground(lipgloss.Color("green"))
 
 	errStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
+			Foreground(lipgloss.Color("red")).
 			Bold(true)
 
 	okStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("250"))
+		Foreground(lipgloss.Color("bright black"))
 
 	helpStyle = lipgloss.NewStyle().
 			Faint(true)
@@ -151,7 +151,7 @@ func (m Model) audioView(b *strings.Builder) {
 func (m Model) loopRow() string {
 	st := m.ap.loop.State()
 	stateTxt := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205")).
+		Foreground(lipgloss.Color("magenta")).
 		Bold(st != looper.Idle).
 		Render(st.String())
 	return fmt.Sprintf("  loop: %s %5.1fs", stateTxt, m.ap.loop.Seconds())
@@ -188,7 +188,7 @@ func (m Model) lampView() string {
 	if len(m.lamps.Names()) == 0 {
 		return ""
 	}
-	dark := lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Render("○")
+	dark := lipgloss.NewStyle().Foreground(lipgloss.Color("bright black")).Render("○")
 	// keep the original leading-space + spacing layout
 	inLit := m.lamps.Lit("in")
 	outLit := m.lamps.Lit("out")
