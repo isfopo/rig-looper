@@ -6,4 +6,4 @@
 	url = https://github.com/isfopo/rig-components.git
 [submodule "meta"]
 	path = meta
-	url = /home/isaac/Projects/rig/rig-meta
+	url = https://github.com/isfopo/rig-meta.git
